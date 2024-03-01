@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 
 	_ "github.com/lib/pq"
 )
@@ -35,11 +36,20 @@ func (s *PostgresStore) UpdateAccount(account *Account) error {
 }
 
 func (s *PostgresStore) GetAccountById(id int) (*Account, error) {
-	return nil, nil
+	query := `select * from account where id = $1`
+	rows, err := s.db.Query(query, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("Account with id - %d wasn't found", id)
 }
 
 func (s *PostgresStore) DeleteAccount(id int) error {
-	return nil
+	_, err := s.db.Query(`delete from account where id = $1`, id)
+	return err
 }
 
 func (s *PostgresStore) Init() error {
@@ -50,20 +60,13 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 	query := `
 	select * from account
 	`
-	res, err := s.db.Query(query)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	accounts := []*Account{}
-	for res.Next() {
-		account := &Account{}
-		err := res.Scan(
-			&account.ID,
-			&account.FirstName,
-			&account.LastName,
-			&account.Number,
-			&account.Balance,
-			&account.Created_at)
+	for rows.Next() {
+		account, err := scanIntoAccount(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -103,4 +106,16 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{
 		db: db,
 	}, nil
+}
+
+func scanIntoAccount(rows *sql.Rows) (*Account, error) {
+	account := &Account{}
+	err := rows.Scan(
+		&account.ID,
+		&account.FirstName,
+		&account.LastName,
+		&account.Number,
+		&account.Balance,
+		&account.Created_at)
+	return account, err
 }
