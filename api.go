@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
 )
 
@@ -42,6 +44,30 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
 		}
 	}
+}
+
+func withJWTauth(handlerFunc http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("with jwt middleware")
+		handlerFunc(w, r)
+	}
+}
+
+func validJWT(jwtString string) (*jwt.Token, error) {
+	secret := os.Getenv("JWT_SECRET")
+	return jwt.Parse(jwtString, func(token *jwt.Token) (interface{}, error) {
+		// Don't forget to validate the alg is what you expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+
+		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
+		return []byte(secret), nil
+	})
+}
+
+func (s *APIserver) handleTransaction(w http.ResponseWriter, r *http.Request) error {
+	return nil
 }
 
 func (s *APIserver) handleAccount(w http.ResponseWriter, r *http.Request) error {
@@ -103,10 +129,6 @@ func (s *APIserver) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 	return WriteJSON(w, http.StatusOK, "account with was deleted")
-}
-
-func (s *APIserver) handleTransaction(w http.ResponseWriter, r *http.Request) error {
-	return nil
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
