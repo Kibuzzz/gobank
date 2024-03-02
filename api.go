@@ -46,9 +46,27 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 	}
 }
 
+func createJWT(account *Account) (string, error) {
+	claims := &jwt.MapClaims{
+		"expiresAt":     15000,
+		"accountNumber": account.Number,
+	}
+	secret := os.Getenv("JWT_SECRET")
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
 func withJWTauth(handlerFunc http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("with jwt middleware")
+
+		jwtString := r.Header.Get("x-jwt-token")
+		_, err := validJWT(jwtString)
+		if err != nil {
+			WriteJSON(w, http.StatusForbidden, ApiError{Error: "invalid token"})
+			return
+		}
+
 		handlerFunc(w, r)
 	}
 }
@@ -118,6 +136,12 @@ func (s *APIserver) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	if err := s.store.CreateAccount(new_account); err != nil {
 		return err
 	}
+
+	jwtString, err := createJWT(new_account)
+	if err != nil {
+		return err
+	}
+	fmt.Println(jwtString)
 	return WriteJSON(w, http.StatusOK, new_account)
 }
 func (s *APIserver) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
